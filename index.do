@@ -1,3 +1,5 @@
+import { BlobReader, BlobBuilder } from "std/blob"
+
 class FilteredStream<T> implements Stream<T> {
   source: Stream<T>
   pred: (it: T): bool
@@ -60,4 +62,128 @@ export class Chain<T> implements Stream<T> {
     }
     return values
   }
+}
+
+class DecodedLineStream implements Stream<string> {
+  source: Stream<readonly byte[]>
+  pendingLine: BlobBuilder = BlobBuilder()
+  current: BlobReader = BlobReader([])
+  lineBreakBytes: readonly byte[] = [10, 13]
+  sourceDone: bool = false
+  skipLeadingLf: bool = false
+
+  loadNextChunk(): bool {
+    if this.sourceDone {
+      return false
+    }
+
+    chunk := this.source.next() else {
+      this.sourceDone = true
+      return false
+    }
+
+    this.current = BlobReader(chunk)
+    return true
+  }
+
+  skipLeadingLineFeed(): void {
+    if !this.skipLeadingLf || this.current.remaining() == 0L {
+      return
+    }
+
+    nextPosition := this.current.getPosition()
+    if this.current.readByte() != 10 {
+      this.current.setPosition(nextPosition)
+    }
+    this.skipLeadingLf = false
+  }
+
+  finishPendingLine(): string {
+    lineBytes := this.pendingLine.build()
+    lineReader := BlobReader(lineBytes)
+    return lineReader.readString(lineReader.remaining())
+  }
+
+  flushTrailingLine(): string | null {
+    remaining := this.current.remaining()
+    if remaining > 0L {
+      if this.pendingLine.length() == 0L {
+        return this.current.readString(remaining)
+      }
+
+      this.pendingLine.writeBytes(this.current.readBytes(remaining))
+    }
+
+    if this.pendingLine.length() == 0L {
+      return null
+    }
+
+    return this.finishPendingLine()
+  }
+
+  tryTakeCurrentLine(): string | null {
+    if this.current.remaining() == 0L {
+      return null
+    }
+
+    startPosition := this.current.getPosition()
+    delimiterIndex := this.current.findNextAny(this.lineBreakBytes) else {
+      return null
+    }
+
+    lineLength := delimiterIndex - startPosition
+    if this.pendingLine.length() == 0L {
+      line := this.current.readString(lineLength)
+      if this.current.readByte() == 13 {
+        this.skipLeadingLf = true
+      }
+      return line
+    }
+
+    if lineLength > 0L {
+      this.pendingLine.writeBytes(this.current.readBytes(lineLength))
+    }
+
+    line := this.finishPendingLine()
+    if this.current.readByte() == 13 {
+      this.skipLeadingLf = true
+    }
+
+    return line
+  }
+
+  moveCurrentRemainderToPending(): void {
+    remaining := this.current.remaining()
+    if remaining > 0L {
+      this.pendingLine.writeBytes(this.current.readBytes(remaining))
+    }
+  }
+
+  next(): string | null {
+    while true {
+      this.skipLeadingLineFeed()
+
+      candidate := this.tryTakeCurrentLine()
+      if candidate != null {
+        return candidate
+      }
+
+      if this.sourceDone {
+        return this.flushTrailingLine()
+      }
+
+      this.moveCurrentRemainderToPending()
+
+      if !this.loadNextChunk() {
+        return this.flushTrailingLine()
+      }
+    }
+  }
+}
+
+export function blobStreamToLineStream(source: Stream<readonly byte[]>): Stream<string> {
+  let stream: Stream<string> = DecodedLineStream {
+    source,
+  }
+  return stream
 }
