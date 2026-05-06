@@ -3,61 +3,64 @@ import { BlobReader, BlobBuilder } from "std/blob"
 class FilteredStream<T> implements Stream<T> {
   source: Stream<T>
   pred: (it: T): bool
+  currentValue: T | null = null
 
-  next(): T | null {
+  next(): bool {
     while true {
-      candidate := this.source.next() else {
-          return null
+      if !source.next() {
+          return false
       }
+      candidate := source.value()
       
-      if (this.pred(candidate)) {
-          return candidate
+      if (pred(candidate)) {
+          currentValue = candidate
+          return true
       }
     }
   }
+
+  value(): T => currentValue!
 }
 
 class MappedStream<T, U> implements Stream<U> {
   source: Stream<T>
   transform: (it: T): U
 
-  next(): U | null {
-    value := this.source.next() else {
-      return null
-    }
-    return this.transform(value)
-  }
+  next(): bool =>source.next()
+  value(): U => transform(source.value())
 }
 
 class TakeStream<T> implements Stream<T> {
   source: Stream<T>
   remaining: int
 
-  next(): T | null {
-    if this.remaining <= 0 {
-      return null
+  next(): bool {
+    if remaining <= 0 {
+      return false
     }
-    value := this.source.next()
-    if value == null {
-      return null
+    if !source.next() {
+      return false
     }
-    this.remaining = this.remaining - 1
-    return value
+    remaining = remaining - 1
+    return true
   }
+
+  value(): T => source.value()
 }
 
 export class Chain<T> implements Stream<T> {
   source: Stream<T>
 
-  next(): T | null => this.source.next()
+  next(): bool => source.next()
+  value(): T => source.value()
 
-  filter(pred: (it: T): bool): Chain<T> => Chain<T> { source: FilteredStream<T> { source: this.source, pred } }
-  map<U>(transform: (it: T): U): Chain<U> => Chain<U> { source: MappedStream<T, U> { source: this.source, transform } }
-  take(count: int): Chain<T> => Chain<T> { source: TakeStream<T> { source: this.source, remaining: count } }
+  filter(pred: (it: T): bool): Chain<T> => Chain<T> { source: FilteredStream<T> { source, pred } }
+  map<U>(transform: (it: T): U): Chain<U> => Chain<U> { source: MappedStream<T, U> { source, transform } }
+  take(count: int): Chain<T> => Chain<T> { source: TakeStream<T> { source, remaining: count } }
 
   collect(): T[] {
     let values: T[] = []
-    for item of this.source {
+    for item of source {
       values.push(item)
     }
     return values
@@ -68,117 +71,132 @@ class DecodedLineStream implements Stream<string> {
   source: Stream<readonly byte[]>
   pendingLine: BlobBuilder = BlobBuilder()
   current: BlobReader = BlobReader([])
+  currentValue: string | null = null
   lineBreakBytes: readonly byte[] = [10, 13]
   sourceDone: bool = false
   skipLeadingLf: bool = false
 
   loadNextChunk(): bool {
-    if this.sourceDone {
+    if sourceDone {
       return false
     }
 
-    chunk := this.source.next() else {
-      this.sourceDone = true
+    if !source.next() {
+      sourceDone = true
       return false
     }
+    chunk := source.value()
 
-    this.current = BlobReader(chunk)
+    current = BlobReader(chunk)
     return true
   }
 
   skipLeadingLineFeed(): void {
-    if !this.skipLeadingLf || this.current.remaining() == 0L {
+    if !skipLeadingLf || current.remaining() == 0L {
       return
     }
 
-    nextPosition := this.current.getPosition()
-    if this.current.readByte() != 10 {
-      this.current.setPosition(nextPosition)
+    nextPosition := current.getPosition()
+    if current.readByte() != 10 {
+      current.setPosition(nextPosition)
     }
-    this.skipLeadingLf = false
+    skipLeadingLf = false
   }
 
   finishPendingLine(): string {
-    lineBytes := this.pendingLine.build()
+    lineBytes := pendingLine.build()
     lineReader := BlobReader(lineBytes)
     return lineReader.readString(lineReader.remaining())
   }
 
   flushTrailingLine(): string | null {
-    remaining := this.current.remaining()
+    remaining := current.remaining()
     if remaining > 0L {
-      if this.pendingLine.length() == 0L {
-        return this.current.readString(remaining)
+      if pendingLine.length() == 0L {
+        return current.readString(remaining)
       }
 
-      this.pendingLine.writeBytes(this.current.readBytes(remaining))
+      pendingLine.writeBytes(current.readBytes(remaining))
     }
 
-    if this.pendingLine.length() == 0L {
+    if pendingLine.length() == 0L {
       return null
     }
 
-    return this.finishPendingLine()
+    return finishPendingLine()
   }
 
   tryTakeCurrentLine(): string | null {
-    if this.current.remaining() == 0L {
+    if current.remaining() == 0L {
       return null
     }
 
-    startPosition := this.current.getPosition()
-    delimiterIndex := this.current.findNextAny(this.lineBreakBytes) else {
+    startPosition := current.getPosition()
+    delimiterIndex := current.findNextAny(lineBreakBytes) else {
       return null
     }
 
     lineLength := delimiterIndex - startPosition
-    if this.pendingLine.length() == 0L {
-      line := this.current.readString(lineLength)
-      if this.current.readByte() == 13 {
-        this.skipLeadingLf = true
+    if pendingLine.length() == 0L {
+      line := current.readString(lineLength)
+      if current.readByte() == 13 {
+        skipLeadingLf = true
       }
       return line
     }
 
     if lineLength > 0L {
-      this.pendingLine.writeBytes(this.current.readBytes(lineLength))
+      pendingLine.writeBytes(current.readBytes(lineLength))
     }
 
-    line := this.finishPendingLine()
-    if this.current.readByte() == 13 {
-      this.skipLeadingLf = true
+    line := finishPendingLine()
+    if current.readByte() == 13 {
+      skipLeadingLf = true
     }
 
     return line
   }
 
   moveCurrentRemainderToPending(): void {
-    remaining := this.current.remaining()
+    remaining := current.remaining()
     if remaining > 0L {
-      this.pendingLine.writeBytes(this.current.readBytes(remaining))
+      pendingLine.writeBytes(current.readBytes(remaining))
     }
   }
 
-  next(): string | null {
+  next(): bool {
     while true {
-      this.skipLeadingLineFeed()
+      skipLeadingLineFeed()
 
-      candidate := this.tryTakeCurrentLine()
+      candidate := tryTakeCurrentLine()
       if candidate != null {
-        return candidate
+        currentValue = candidate
+        return true
       }
 
-      if this.sourceDone {
-        return this.flushTrailingLine()
+      if sourceDone {
+        trailing := flushTrailingLine()
+        if trailing == null {
+          return false
+        }
+        currentValue = trailing
+        return true
       }
 
-      this.moveCurrentRemainderToPending()
+      moveCurrentRemainderToPending()
 
-      if !this.loadNextChunk() {
-        return this.flushTrailingLine()
+      if !loadNextChunk() {
+        trailing := flushTrailingLine()
+        if trailing == null {
+          return false
+        }
+        currentValue = trailing
+        return true
       }
     }
   }
+
+  value(): string => currentValue!
 }
 
 export function blobStreamToLineStream(source: Stream<readonly byte[]>): Stream<string> {

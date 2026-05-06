@@ -41,9 +41,13 @@ A `Stream<T>` wrapper that exposes a fluent transformation API. Each operation r
 Chain { source: myStream }
 ```
 
-#### `next(): T | null`
+#### `next(): bool`
 
-Pull the next item from the chain. Returns `null` when the stream is exhausted.
+Advance the chain to the next item. Returns `false` when the stream is exhausted.
+
+#### `value(): T`
+
+Read the current item after `next()` returns `true`.
 
 #### `filter(pred: (it: T): bool): Chain<T>`
 
