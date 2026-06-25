@@ -2,6 +2,11 @@
 
 Composable stream utilities. Provides `Chain<T>` — a fluent wrapper around any `Stream<T>` — and `blobStreamToLineStream`, which converts a stream of raw byte chunks into a stream of decoded UTF-8 lines.
 
+## Documentation
+
+- [Guide and API reference](docs/API.md) explains lazy chains, collection, line decoding, and the exported stream helpers.
+- Tests can be run with `doof test stream`.
+
 ## Usage
 
 ```doof
