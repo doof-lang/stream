@@ -10,7 +10,7 @@ function encodeChunk(text: string): readonly byte[] {
 class EncodedChunkStream implements Stream<readonly byte[]> {
   chunks: readonly string[]
   index: int = 0
-  currentValue: readonly byte[] | null = null
+  currentValue: readonly byte[] | none = none
 
   next(): bool {
     if this.index >= this.chunks.length {

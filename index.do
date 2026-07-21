@@ -3,7 +3,7 @@ import { BlobReader, BlobBuilder } from "std/blob"
 class FilteredStream<T> implements Stream<T> {
   source: Stream<T>
   pred: (it: T): bool
-  currentValue: T | null = null
+  currentValue: T | none = none
 
   next(): bool {
     while true {
@@ -71,7 +71,7 @@ class DecodedLineStream implements Stream<string> {
   source: Stream<readonly byte[]>
   pendingLine: BlobBuilder = BlobBuilder()
   current: BlobReader = BlobReader([])
-  currentValue: string | null = null
+  currentValue: string | none = none
   lineBreakBytes: readonly byte[] = [10, 13]
   sourceDone: bool = false
   skipLeadingLf: bool = false
@@ -91,7 +91,7 @@ class DecodedLineStream implements Stream<string> {
     return true
   }
 
-  skipLeadingLineFeed(): void {
+  skipLeadingLineFeed(): none {
     if !skipLeadingLf || current.remaining() == 0L {
       return
     }
@@ -109,7 +109,7 @@ class DecodedLineStream implements Stream<string> {
     return lineReader.readString(lineReader.remaining())
   }
 
-  flushTrailingLine(): string | null {
+  flushTrailingLine(): string | none {
     remaining := current.remaining()
     if remaining > 0L {
       if pendingLine.length() == 0L {
@@ -120,20 +120,20 @@ class DecodedLineStream implements Stream<string> {
     }
 
     if pendingLine.length() == 0L {
-      return null
+      return none
     }
 
     return finishPendingLine()
   }
 
-  tryTakeCurrentLine(): string | null {
+  tryTakeCurrentLine(): string | none {
     if current.remaining() == 0L {
-      return null
+      return none
     }
 
     startPosition := current.getPosition()
     delimiterIndex := current.findNextAny(lineBreakBytes) else {
-      return null
+      return none
     }
 
     lineLength := delimiterIndex - startPosition
@@ -157,7 +157,7 @@ class DecodedLineStream implements Stream<string> {
     return line
   }
 
-  moveCurrentRemainderToPending(): void {
+  moveCurrentRemainderToPending(): none {
     remaining := current.remaining()
     if remaining > 0L {
       pendingLine.writeBytes(current.readBytes(remaining))
@@ -169,14 +169,14 @@ class DecodedLineStream implements Stream<string> {
       skipLeadingLineFeed()
 
       candidate := tryTakeCurrentLine()
-      if candidate != null {
+      if candidate != none {
         currentValue = candidate
         return true
       }
 
       if sourceDone {
         trailing := flushTrailingLine()
-        if trailing == null {
+        if trailing == none {
           return false
         }
         currentValue = trailing
@@ -187,7 +187,7 @@ class DecodedLineStream implements Stream<string> {
 
       if !loadNextChunk() {
         trailing := flushTrailingLine()
-        if trailing == null {
+        if trailing == none {
           return false
         }
         currentValue = trailing

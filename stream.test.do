@@ -1,6 +1,6 @@
 import { decodeChunkLines } from "./test_support"
 
-export function testBlobStreamToLineStreamHandlesMixedLineEndingsAcrossChunks(): void {
+export function testBlobStreamToLineStreamHandlesMixedLineEndingsAcrossChunks(): none {
   lines := decodeChunkLines(["alpha\r", "\nbe", "ta\n", "\rgam", "ma\rde", "lta"])
 
   assert(lines.length == 5, "expected five decoded lines")
@@ -11,7 +11,7 @@ export function testBlobStreamToLineStreamHandlesMixedLineEndingsAcrossChunks():
   assert(lines[4] == "delta", "expected a trailing unterminated line to be emitted")
 }
 
-export function testBlobStreamToLineStreamEmitsTrailingLineWithoutDelimiter(): void {
+export function testBlobStreamToLineStreamEmitsTrailingLineWithoutDelimiter(): none {
   lines := decodeChunkLines(["one\n", "two", "", "\rthree"])
 
   assert(lines.length == 3, "expected the trailing line to be emitted once the source ends")
