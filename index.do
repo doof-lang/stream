@@ -3,7 +3,7 @@ import { BlobReader, BlobBuilder } from "std/blob"
 class FilteredStream<T> implements Stream<T> {
   source: Stream<T>
   pred: (it: T): bool
-  currentValue: T | none = none
+  let currentValue: T | none = none
 
   next(): bool {
     while true {
@@ -32,7 +32,7 @@ class MappedStream<T, U> implements Stream<U> {
 
 class TakeStream<T> implements Stream<T> {
   source: Stream<T>
-  remaining: int
+  let remaining: int
 
   next(): bool {
     if remaining <= 0 {
@@ -70,11 +70,11 @@ export class Chain<T> implements Stream<T> {
 class DecodedLineStream implements Stream<string> {
   source: Stream<readonly byte[]>
   pendingLine: BlobBuilder = BlobBuilder()
-  current: BlobReader = BlobReader([])
-  currentValue: string | none = none
+  let current: BlobReader = BlobReader([])
+  let currentValue: string | none = none
   lineBreakBytes: readonly byte[] = [10, 13]
-  sourceDone: bool = false
-  skipLeadingLf: bool = false
+  let sourceDone: bool = false
+  let skipLeadingLf: bool = false
 
   loadNextChunk(): bool {
     if sourceDone {
